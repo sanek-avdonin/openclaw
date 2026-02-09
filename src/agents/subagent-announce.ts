@@ -483,11 +483,12 @@ export async function runSubagentAnnounceFlow(params: {
             ? `failed: ${outcome.error || "unknown error"}`
             : "finished with unknown status";
 
-    // Build instructional message for main agent
-    const announceType = params.announceType ?? "subagent task";
+    // Build instructional message for main agent.
+    // This message MUST be safe to deliver back to end users. Avoid terms like "subagent" / "cron job"
+    // in the text to reduce leakage into user-facing summaries.
     const taskLabel = params.label || params.task || "task";
     const triggerMessage = [
-      `A ${announceType} "${taskLabel}" just ${statusLabel}.`,
+      `Background task "${taskLabel}" just ${statusLabel}.`,
       "",
       "Findings:",
       reply || "(no output)",
@@ -495,7 +496,8 @@ export async function runSubagentAnnounceFlow(params: {
       statsLine,
       "",
       "Summarize this naturally for the user. Keep it brief (1-2 sentences). Flow it into the conversation naturally.",
-      `Do not mention technical details like tokens, stats, or that this was a ${announceType}.`,
+      "Do not mention internal mechanisms (agents/subagents, tools, queues, runs, sessions) or technical details (tokens, stats).",
+      "Do NOT spawn/create agents or run tools in this step. Only reply with the user-facing summary or NO_REPLY.",
       "You can respond with NO_REPLY if no announcement is needed (e.g., internal task with no user-facing result).",
     ].join("\n");
 

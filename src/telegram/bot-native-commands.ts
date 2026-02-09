@@ -57,6 +57,8 @@ import {
 import { buildInlineKeyboard } from "./send.js";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
+const DISPATCH_ERROR_FALLBACK =
+  "⚠️ Sorry — I hit an error and couldn’t generate a reply. Please try again.";
 
 type TelegramNativeCommandContext = Context & { match?: string };
 
@@ -566,7 +568,8 @@ export const registerTelegramNativeCommands = ({
 
           const deliveryState = {
             delivered: false,
-            skippedNonSilent: 0,
+            skippedEmpty: 0,
+            deliveryErrors: 0,
           };
 
           const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
@@ -576,47 +579,56 @@ export const registerTelegramNativeCommands = ({
             accountId: route.accountId,
           });
 
-          await dispatchReplyWithBufferedBlockDispatcher({
-            ctx: ctxPayload,
-            cfg,
-            dispatcherOptions: {
-              ...prefixOptions,
-              deliver: async (payload, _info) => {
-                const result = await deliverReplies({
-                  replies: [payload],
-                  chatId: String(chatId),
-                  token: opts.token,
-                  runtime,
-                  bot,
-                  replyToMode,
-                  textLimit,
-                  thread: threadSpec,
-                  tableMode,
-                  chunkMode,
-                  linkPreview: telegramCfg.linkPreview,
-                });
-                if (result.delivered) {
-                  deliveryState.delivered = true;
-                }
+          let queuedFinal = false;
+          let queuedFinalCount = 0;
+          try {
+            const result = await dispatchReplyWithBufferedBlockDispatcher({
+              ctx: ctxPayload,
+              cfg,
+              dispatcherOptions: {
+                ...prefixOptions,
+                deliver: async (payload, _info) => {
+                  const result = await deliverReplies({
+                    replies: [payload],
+                    chatId: String(chatId),
+                    token: opts.token,
+                    runtime,
+                    bot,
+                    replyToMode,
+                    textLimit,
+                    thread: threadSpec,
+                    tableMode,
+                    chunkMode,
+                    linkPreview: telegramCfg.linkPreview,
+                  });
+                  if (result.delivered) {
+                    deliveryState.delivered = true;
+                  }
+                },
+                onSkip: (_payload, info) => {
+                  if (info.reason === "empty") {
+                    deliveryState.skippedEmpty += 1;
+                  }
+                },
+                onError: (err, info) => {
+                  runtime.error?.(
+                    danger(`telegram slash ${info.kind} reply failed: ${String(err)}`),
+                  );
+                  deliveryState.deliveryErrors += 1;
+                },
               },
-              onSkip: (_payload, info) => {
-                if (info.reason !== "silent") {
-                  deliveryState.skippedNonSilent += 1;
-                }
+              replyOptions: {
+                skillFilter,
+                disableBlockStreaming,
+                onModelSelected,
               },
-              onError: (err, info) => {
-                runtime.error?.(danger(`telegram slash ${info.kind} reply failed: ${String(err)}`));
-              },
-            },
-            replyOptions: {
-              skillFilter,
-              disableBlockStreaming,
-              onModelSelected,
-            },
-          });
-          if (!deliveryState.delivered && deliveryState.skippedNonSilent > 0) {
+            });
+            queuedFinal = result.queuedFinal;
+            queuedFinalCount = result.counts.final;
+          } catch (err) {
+            runtime.error?.(danger(`telegram slash dispatch failed: ${String(err)}`));
             await deliverReplies({
-              replies: [{ text: EMPTY_RESPONSE_FALLBACK }],
+              replies: [{ text: DISPATCH_ERROR_FALLBACK }],
               chatId: String(chatId),
               token: opts.token,
               runtime,
@@ -628,6 +640,40 @@ export const registerTelegramNativeCommands = ({
               chunkMode,
               linkPreview: telegramCfg.linkPreview,
             });
+            return;
+          }
+
+          if (!deliveryState.delivered) {
+            const queuedAnything = queuedFinal || queuedFinalCount > 0;
+            if (deliveryState.deliveryErrors > 0 && queuedAnything) {
+              await deliverReplies({
+                replies: [{ text: DISPATCH_ERROR_FALLBACK }],
+                chatId: String(chatId),
+                token: opts.token,
+                runtime,
+                bot,
+                replyToMode,
+                textLimit,
+                thread: threadSpec,
+                tableMode,
+                chunkMode,
+                linkPreview: telegramCfg.linkPreview,
+              });
+            } else if (deliveryState.skippedEmpty > 0) {
+              await deliverReplies({
+                replies: [{ text: EMPTY_RESPONSE_FALLBACK }],
+                chatId: String(chatId),
+                token: opts.token,
+                runtime,
+                bot,
+                replyToMode,
+                textLimit,
+                thread: threadSpec,
+                tableMode,
+                chunkMode,
+                linkPreview: telegramCfg.linkPreview,
+              });
+            }
           }
         });
       }
