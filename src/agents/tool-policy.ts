@@ -42,6 +42,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
     "canvas",
     "nodes",
     "cron",
+    "google_calendar",
     "message",
     "gateway",
     "agents_list",
@@ -75,6 +76,8 @@ const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
       "group:web",
       // Allow reminders/scheduling without gateway restarts or shell access.
       "cron",
+      // Allow creating calendar events without shell access.
+      "google_calendar",
       "sessions_list",
       "sessions_history",
       "sessions_send",
