@@ -251,7 +251,8 @@ export const dispatchTelegramMessage = async ({
       : undefined;
   const deliveryState = {
     delivered: false,
-    skippedNonSilent: 0,
+    skippedEmpty: 0,
+    deliveryErrors: 0,
   };
 
   let queuedFinal = false;
@@ -287,12 +288,15 @@ export const dispatchTelegramMessage = async ({
           }
         },
         onSkip: (_payload, info) => {
-          if (info.reason !== "silent") {
-            deliveryState.skippedNonSilent += 1;
+          // Only treat truly empty output as fallback-worthy.
+          // Heartbeat-only outputs are internal signals and should not trigger a generic "empty" reply.
+          if (info.reason === "empty") {
+            deliveryState.skippedEmpty += 1;
           }
         },
         onError: (err, info) => {
           runtime.error?.(danger(`telegram ${info.kind} reply failed: ${String(err)}`));
+          deliveryState.deliveryErrors += 1;
         },
         onReplyStart: createTypingCallbacks({
           start: sendTyping,
@@ -363,29 +367,42 @@ export const dispatchTelegramMessage = async ({
   }
   draftStream?.stop();
   let sentFallback = false;
-  const shouldSendEmptyFallback =
-    !deliveryState.delivered &&
-    // If the dispatcher dropped non-silent payloads, show a fallback message.
-    (deliveryState.skippedNonSilent > 0 ||
-      // If a final reply was queued but nothing was actually delivered, treat it as empty output.
-      queuedFinalCount > 0 ||
-      queuedFinal);
-  if (shouldSendEmptyFallback) {
-    const result = await deliverReplies({
-      replies: [{ text: EMPTY_RESPONSE_FALLBACK }],
-      chatId: String(chatId),
-      token: opts.token,
-      runtime,
-      bot,
-      replyToMode,
-      textLimit,
-      thread: threadSpec,
-      tableMode,
-      chunkMode,
-      linkPreview: telegramCfg.linkPreview,
-      replyQuoteText,
-    });
-    sentFallback = result.delivered;
+  if (!deliveryState.delivered) {
+    const queuedAnything = queuedFinal || queuedFinalCount > 0;
+    // If a reply was queued but delivery threw, send an explicit error message instead of "empty".
+    if (deliveryState.deliveryErrors > 0 && queuedAnything) {
+      const result = await deliverReplies({
+        replies: [{ text: DISPATCH_ERROR_FALLBACK }],
+        chatId: String(chatId),
+        token: opts.token,
+        runtime,
+        bot,
+        replyToMode,
+        textLimit,
+        thread: threadSpec,
+        tableMode,
+        chunkMode,
+        linkPreview: telegramCfg.linkPreview,
+        replyQuoteText,
+      });
+      sentFallback = result.delivered;
+    } else if (deliveryState.skippedEmpty > 0) {
+      const result = await deliverReplies({
+        replies: [{ text: EMPTY_RESPONSE_FALLBACK }],
+        chatId: String(chatId),
+        token: opts.token,
+        runtime,
+        bot,
+        replyToMode,
+        textLimit,
+        thread: threadSpec,
+        tableMode,
+        chunkMode,
+        linkPreview: telegramCfg.linkPreview,
+        replyQuoteText,
+      });
+      sentFallback = result.delivered;
+    }
   }
 
   const hasFinalResponse = queuedFinal || sentFallback;

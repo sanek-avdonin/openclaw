@@ -64,12 +64,10 @@ describe("registerTelegramNativeCommands empty-response fallback", () => {
     };
 
     dispatchReplyWithBufferedBlockDispatcher.mockImplementation(async ({ dispatcherOptions }) => {
-      await dispatcherOptions.deliver({ text: "" }, { kind: "final" });
-      return { queuedFinal: true, counts: { tool: 0, block: 0, final: 1 } };
+      dispatcherOptions.onSkip?.({ text: "" }, { kind: "final", reason: "empty" });
+      return { queuedFinal: false, counts: { tool: 0, block: 0, final: 0 } };
     });
-    deliverReplies
-      .mockResolvedValueOnce({ delivered: false }) // empty final doesn't deliver
-      .mockResolvedValueOnce({ delivered: true }); // fallback
+    deliverReplies.mockResolvedValueOnce({ delivered: true }); // fallback
 
     registerTelegramNativeCommands({
       bot: bot as unknown as Parameters<typeof registerTelegramNativeCommands>[0]["bot"],
@@ -108,7 +106,7 @@ describe("registerTelegramNativeCommands empty-response fallback", () => {
     });
 
     expect(deliverReplies).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.objectContaining({
         replies: [{ text: "No response generated. Please try again." }],
       }),
