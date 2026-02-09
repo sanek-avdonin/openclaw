@@ -48,8 +48,28 @@ import { appendUntrustedContext } from "./untrusted-context.js";
 type AgentDefaults = NonNullable<OpenClawConfig["agents"]>["defaults"];
 type ExecOverrides = Pick<ExecToolDefaults, "host" | "security" | "ask" | "node">;
 
-const BARE_SESSION_RESET_PROMPT =
-  "A new session was started via /new or /reset. Greet the user in your configured persona, if one is provided. Be yourself - use your defined voice, mannerisms, and mood. Keep it to 1-3 sentences and ask what they want to do. If the runtime model differs from default_model in the system prompt, mention the default model. Do not mention internal steps, files, tools, or reasoning.";
+function buildBareSessionResetPrompt(params: {
+  provider: string;
+  model: string;
+  defaultProvider: string;
+  defaultModel: string;
+}): string {
+  const runtimeLabel = `${params.provider}/${params.model}`;
+  const defaultLabel = `${params.defaultProvider}/${params.defaultModel}`;
+  // Keep the original first sentence stable: multiple tests assert this substring.
+  // Include explicit labels so the model can reliably mention the default when it differs.
+  return [
+    "A new session was started via /new or /reset. " +
+      "Greet the user in your configured persona, if one is provided. " +
+      "Be yourself - use your defined voice, mannerisms, and mood. " +
+      "Keep it to 1-3 sentences and ask what they want to do. " +
+      "If the runtime model differs from default_model, mention the default model. " +
+      "Do not mention internal steps, files, tools, or reasoning.",
+    "",
+    `runtime_model=${runtimeLabel}`,
+    `default_model=${defaultLabel}`,
+  ].join("\n");
+}
 
 type RunPreparedReplyParams = {
   ctx: MsgContext;
@@ -199,7 +219,9 @@ export async function runPreparedReply(
   const isBareSessionReset =
     isNewSession &&
     ((baseBodyTrimmedRaw.length === 0 && rawBodyTrimmed.length > 0) || isBareNewOrReset);
-  const baseBodyFinal = isBareSessionReset ? BARE_SESSION_RESET_PROMPT : baseBody;
+  const baseBodyFinal = isBareSessionReset
+    ? buildBareSessionResetPrompt({ provider, model, defaultProvider, defaultModel })
+    : baseBody;
   const baseBodyTrimmed = baseBodyFinal.trim();
   if (!baseBodyTrimmed) {
     await typing.onReplyStart();
