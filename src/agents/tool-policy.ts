@@ -70,6 +70,9 @@ const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
   messaging: {
     allow: [
       "group:messaging",
+      // Enable lightweight “simple question” capabilities (weather, quick lookups)
+      // without granting filesystem or exec access.
+      "group:web",
       "sessions_list",
       "sessions_history",
       "sessions_send",

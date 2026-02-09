@@ -354,6 +354,7 @@ describe("createOpenClawCodingTools", () => {
     expect(names.has("message")).toBe(true);
     expect(names.has("sessions_send")).toBe(true);
     expect(names.has("sessions_spawn")).toBe(false);
+    expect(names.has("web_fetch")).toBe(true);
     expect(names.has("exec")).toBe(false);
     expect(names.has("browser")).toBe(false);
   });

@@ -17,6 +17,9 @@ describe("tool-policy", () => {
   it("resolves known profiles and ignores unknown ones", () => {
     const coding = resolveToolProfilePolicy("coding");
     expect(coding?.allow).toContain("group:fs");
+    const messaging = resolveToolProfilePolicy("messaging");
+    expect(messaging?.allow).toContain("group:messaging");
+    expect(messaging?.allow).toContain("group:web");
     expect(resolveToolProfilePolicy("nope")).toBeUndefined();
   });
 
