@@ -38,7 +38,7 @@ Profiles:
 
 - `minimal`: `session_status` only
 - `coding`: `group:fs`, `group:runtime`, `group:sessions`, `group:memory`, `image`
-- `messaging`: `group:messaging`, `sessions_list`, `sessions_history`, `sessions_send`, `session_status`
+- `messaging`: `group:messaging`, `group:web`, `cron`, `google_calendar`, `sessions_list`, `sessions_history`, `sessions_send`, `session_status`
 - `full`: no restriction (same as unset)
 
 Example (messaging-only by default, allow Slack + Discord tools too):
