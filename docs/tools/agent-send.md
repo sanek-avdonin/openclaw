@@ -21,10 +21,15 @@ runtime on the current machine.
 - Runs the same embedded agent runtime as normal inbound replies.
 - Thinking/verbose flags persist into the session store.
 - Output:
-  - default: prints reply text (plus `MEDIA:<url>` lines)
+  - default: prints reply text (plus `MEDIA:<value>` lines for attachments)
   - `--json`: prints structured payload + metadata
 - Optional delivery back to a channel with `--deliver` + `--channel` (target formats match `openclaw message --target`).
 - Use `--reply-channel`/`--reply-to`/`--reply-account` to override delivery without changing the session.
+
+Notes on attachments:
+
+- Prefer sending attachments via the `message` tool (`media` for URLs, `path`/`filePath` for local files) when you have tool access.
+- Inline `MEDIA:` extraction only accepts URLs (`https://...`) or safe relative paths (`./...` with no `..`). If the value contains spaces, wrap it in quotes.
 
 If the Gateway is unreachable, the CLI **falls back** to the embedded local run.
 

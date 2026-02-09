@@ -32,6 +32,18 @@ describe("splitMediaFromOutput", () => {
     expect(result.text).toBe("MEDIA:../../etc/passwd");
   });
 
+  it("rejects unquoted media URLs containing spaces (require quoting)", () => {
+    const result = splitMediaFromOutput("MEDIA:https://example.com/my image.png");
+    expect(result.mediaUrls).toBeUndefined();
+    expect(result.text).toBe("MEDIA:https://example.com/my image.png");
+  });
+
+  it("accepts quoted media URLs containing spaces", () => {
+    const result = splitMediaFromOutput('MEDIA:"https://example.com/my image.png"');
+    expect(result.mediaUrls).toEqual(["https://example.com/my image.png"]);
+    expect(result.text).toBe("");
+  });
+
   it("captures safe relative media paths", () => {
     const result = splitMediaFromOutput("MEDIA:./screenshots/image.png");
     expect(result.mediaUrls).toEqual(["./screenshots/image.png"]);

@@ -392,6 +392,10 @@ Notes:
 - `send` routes WhatsApp via the Gateway; other channels go direct.
 - `poll` uses the Gateway for WhatsApp and MS Teams; Discord polls go direct.
 - When a message tool call is bound to an active chat session, sends are constrained to that session’s target to avoid cross-context leaks.
+- For sending images/files, prefer the message tool over inline `MEDIA:`:
+  - Use `media` for URLs, or `path`/`filePath` for local files.
+  - Keep captions in the normal text (`message`), not on a `MEDIA:` line.
+  - Inline `MEDIA:` extraction only accepts `https://...` URLs or safe relative paths starting with `./` (no `..`); absolute paths (`/…`) and `~` are blocked.
 
 ### `cron`
 

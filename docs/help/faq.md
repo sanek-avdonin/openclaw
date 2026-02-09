@@ -2647,7 +2647,15 @@ Start the Gateway with `--verbose` to get more console detail. Then inspect the 
 
 ### My skill generated an imagePDF but nothing was sent
 
-Outbound attachments from the agent must include a `MEDIA:<path-or-url>` line (on its own line). See [OpenClaw assistant setup](/start/openclaw) and [Agent send](/tools/agent-send).
+Outbound attachments from the agent must include a `MEDIA:<value>` line (on its own line). See [OpenClaw assistant setup](/start/openclaw) and [Agent send](/tools/agent-send).
+
+Rules for `MEDIA:`:
+
+- Prefer URLs: `MEDIA:https://example.com/image.png`
+- Local paths must be safe relative paths: `MEDIA:./image.png` (must start with `./`, must not contain `..`)
+- If the value contains spaces, wrap it in quotes: `MEDIA:"./my image.png"` or `MEDIA:"https://example.com/my image.png"`
+- Absolute paths (`MEDIA:/...`) and `~` paths (`MEDIA:~/...`) are blocked for security.
+- Keep captions in the normal text body, not on the `MEDIA:` line.
 
 CLI sending:
 

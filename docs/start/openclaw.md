@@ -191,7 +191,17 @@ Inbound attachments (images/audio/docs) can be surfaced to your command via temp
 - `{{MediaUrl}}` (pseudo-URL)
 - `{{Transcript}}` (if audio transcription is enabled)
 
-Outbound attachments from the agent: include `MEDIA:<path-or-url>` on its own line (no spaces). Example:
+Outbound attachments from the agent: include a `MEDIA:<value>` line on its own line.
+
+Guidelines:
+
+- Prefer the `message` tool for sending images/files back to chats (use `media` for URLs or `path`/`filePath` for local files).
+- If you must inline `MEDIA:` in text output:
+  - Use a URL: `MEDIA:https://example.com/screenshot.png`
+  - Or a safe relative path: `MEDIA:./screenshot.png` (must start with `./` and must not contain `..`)
+  - If the value contains spaces, wrap it in quotes: `MEDIA:"./my screenshot.png"` or `MEDIA:"https://example.com/my screenshot.png"`
+  - Avoid absolute paths (`MEDIA:/...`) and `~` paths (`MEDIA:~/...`) — they are blocked for security.
+- Keep captions in the normal text body, not on the `MEDIA:` line.
 
 ```
 Here’s the screenshot.
