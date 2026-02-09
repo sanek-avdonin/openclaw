@@ -163,7 +163,7 @@ describe("openclaw-tools: subagents", () => {
     // Second call: main agent trigger (not "Sub-agent announce step." anymore)
     const second = agentCalls[1]?.params as { sessionKey?: string; message?: string } | undefined;
     expect(second?.sessionKey).toBe("main");
-    expect(second?.message).toContain("subagent task");
+    expect(second?.message).toContain("Background task");
 
     // No direct send to external channel (main agent handles delivery)
     const sendCalls = calls.filter((c) => c.method === "send");

@@ -99,7 +99,7 @@ describe("subagent announce formatting", () => {
     };
     const msg = call?.params?.message as string;
     expect(call?.params?.sessionKey).toBe("agent:main:main");
-    expect(msg).toContain("subagent task");
+    expect(msg).toContain("Background task");
     expect(msg).toContain("failed");
     expect(msg).toContain("boom");
     expect(msg).toContain("Findings:");
@@ -160,7 +160,7 @@ describe("subagent announce formatting", () => {
     expect(didAnnounce).toBe(true);
     expect(embeddedRunMock.queueEmbeddedPiMessage).toHaveBeenCalledWith(
       "session-123",
-      expect.stringContaining("subagent task"),
+      expect.stringContaining("Background task"),
     );
     expect(agentSpy).not.toHaveBeenCalled();
   });
