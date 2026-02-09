@@ -73,6 +73,8 @@ const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
       // Enable lightweight “simple question” capabilities (weather, quick lookups)
       // without granting filesystem or exec access.
       "group:web",
+      // Allow reminders/scheduling without gateway restarts or shell access.
+      "cron",
       "sessions_list",
       "sessions_history",
       "sessions_send",

@@ -20,6 +20,7 @@ describe("tool-policy", () => {
     const messaging = resolveToolProfilePolicy("messaging");
     expect(messaging?.allow).toContain("group:messaging");
     expect(messaging?.allow).toContain("group:web");
+    expect(messaging?.allow).toContain("cron");
     expect(resolveToolProfilePolicy("nope")).toBeUndefined();
   });
 
