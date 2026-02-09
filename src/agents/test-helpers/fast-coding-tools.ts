@@ -12,8 +12,10 @@ vi.mock("../tools/image-tool.js", () => ({
 }));
 
 vi.mock("../tools/web-tools.js", () => ({
-  createWebSearchTool: () => null,
-  createWebFetchTool: () => null,
+  // Keep web tools “present” but fast (no network) so tool policy
+  // group expansion remains representative in unit tests.
+  createWebSearchTool: () => stubTool("web_search"),
+  createWebFetchTool: () => stubTool("web_fetch"),
 }));
 
 vi.mock("../../plugins/tools.js", () => ({
