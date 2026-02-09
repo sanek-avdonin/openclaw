@@ -109,6 +109,14 @@ export function splitMediaFromOutput(raw: string): {
       const payload = match[1];
       const unwrapped = unwrapQuoted(payload);
       const payloadValue = unwrapped ?? payload;
+      // URLs with spaces are ambiguous when unquoted (they get split into multiple tokens).
+      // Require quoting so we don't accidentally extract a truncated URL.
+      const trimmedPayloadValue = payloadValue.trim();
+      if (!unwrapped && /^https?:\/\//i.test(trimmedPayloadValue) && /\s/.test(payloadValue)) {
+        pieces.push(match[0]);
+        cursor = start + match[0].length;
+        continue;
+      }
       const parts = unwrapped ? [unwrapped] : payload.split(/\s+/).filter(Boolean);
       const mediaStartIndex = media.length;
       let validCount = 0;
