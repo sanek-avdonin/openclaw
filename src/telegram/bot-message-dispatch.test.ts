@@ -42,7 +42,7 @@ describe("dispatchTelegramMessage draft streaming", () => {
       async ({ dispatcherOptions, replyOptions }) => {
         await replyOptions?.onPartialReply?.({ text: "Hello" });
         await dispatcherOptions.deliver({ text: "Hello" }, { kind: "final" });
-        return { queuedFinal: true };
+        return { queuedFinal: true, counts: { tool: 0, block: 0, final: 1 } };
       },
     );
     deliverReplies.mockResolvedValue({ delivered: true });
@@ -106,6 +106,87 @@ describe("dispatchTelegramMessage draft streaming", () => {
     expect(deliverReplies).toHaveBeenCalledWith(
       expect.objectContaining({
         thread: { id: 777, scope: "dm" },
+      }),
+    );
+  });
+});
+
+describe("dispatchTelegramMessage empty final fallback", () => {
+  beforeEach(() => {
+    createTelegramDraftStream.mockReset();
+    dispatchReplyWithBufferedBlockDispatcher.mockReset();
+    deliverReplies.mockReset();
+  });
+
+  it("sends a fallback when a final reply is queued but delivers nothing", async () => {
+    createTelegramDraftStream.mockReturnValue(undefined);
+    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(async ({ dispatcherOptions }) => {
+      await dispatcherOptions.deliver({ text: "" }, { kind: "final" });
+      return { queuedFinal: true, counts: { tool: 0, block: 0, final: 1 } };
+    });
+    deliverReplies
+      .mockResolvedValueOnce({ delivered: false }) // empty text payload gets dropped by delivery layer
+      .mockResolvedValueOnce({ delivered: true }); // fallback message
+
+    const resolveBotTopicsEnabled = vi.fn().mockResolvedValue(false);
+    const context = {
+      ctxPayload: {},
+      primaryCtx: { message: { chat: { id: 123, type: "private" } } },
+      msg: {
+        chat: { id: 123, type: "private" },
+        message_id: 456,
+      },
+      chatId: 123,
+      isGroup: false,
+      resolvedThreadId: undefined,
+      replyThreadId: undefined,
+      threadSpec: { id: undefined, scope: "dm" },
+      historyKey: undefined,
+      historyLimit: 0,
+      groupHistories: new Map(),
+      route: { agentId: "default", accountId: "default" },
+      skillFilter: undefined,
+      sendTyping: vi.fn(),
+      sendRecordVoice: vi.fn(),
+      ackReactionPromise: null,
+      reactionApi: null,
+      removeAckAfterReply: false,
+    };
+
+    const bot = { api: {} } as unknown as Bot;
+    const runtime = {
+      log: vi.fn(),
+      error: vi.fn(),
+      exit: () => {
+        throw new Error("exit");
+      },
+    };
+
+    await dispatchTelegramMessage({
+      context,
+      bot,
+      cfg: {},
+      runtime,
+      replyToMode: "first",
+      streamMode: "off",
+      textLimit: 4096,
+      telegramCfg: {},
+      opts: { token: "token" },
+      resolveBotTopicsEnabled,
+    });
+
+    // First call attempts to deliver the (empty) final.
+    expect(deliverReplies).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        replies: [{ text: "" }],
+      }),
+    );
+    // Second call is the fallback.
+    expect(deliverReplies).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        replies: [{ text: "No response generated. Please try again." }],
       }),
     );
   });

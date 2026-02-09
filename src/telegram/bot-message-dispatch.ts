@@ -21,12 +21,15 @@ import { createReplyPrefixOptions } from "../channels/reply-prefix.js";
 import { createTypingCallbacks } from "../channels/typing.js";
 import { resolveMarkdownTableMode } from "../config/markdown-tables.js";
 import { danger, logVerbose } from "../globals.js";
+import { formatUncaughtError } from "../infra/errors.js";
 import { deliverReplies } from "./bot/delivery.js";
 import { resolveTelegramDraftStreamingChunking } from "./draft-chunking.js";
 import { createTelegramDraftStream } from "./draft-stream.js";
 import { cacheSticker, describeStickerImage } from "./sticker-cache.js";
 
 const EMPTY_RESPONSE_FALLBACK = "No response generated. Please try again.";
+const DISPATCH_ERROR_FALLBACK =
+  "⚠️ Sorry — I hit an error and couldn’t generate a reply. Please try again.";
 
 async function resolveStickerVisionSupport(cfg: OpenClawConfig, agentId: string) {
   try {
@@ -251,65 +254,123 @@ export const dispatchTelegramMessage = async ({
     skippedNonSilent: 0,
   };
 
-  const { queuedFinal } = await dispatchReplyWithBufferedBlockDispatcher({
-    ctx: ctxPayload,
-    cfg,
-    dispatcherOptions: {
-      ...prefixOptions,
-      deliver: async (payload, info) => {
-        if (info.kind === "final") {
-          await flushDraft();
-          draftStream?.stop();
-        }
-        const result = await deliverReplies({
-          replies: [payload],
-          chatId: String(chatId),
-          token: opts.token,
-          runtime,
-          bot,
-          replyToMode,
-          textLimit,
-          thread: threadSpec,
-          tableMode,
-          chunkMode,
-          onVoiceRecording: sendRecordVoice,
-          linkPreview: telegramCfg.linkPreview,
-          replyQuoteText,
-        });
-        if (result.delivered) {
-          deliveryState.delivered = true;
-        }
-      },
-      onSkip: (_payload, info) => {
-        if (info.reason !== "silent") {
-          deliveryState.skippedNonSilent += 1;
-        }
-      },
-      onError: (err, info) => {
-        runtime.error?.(danger(`telegram ${info.kind} reply failed: ${String(err)}`));
-      },
-      onReplyStart: createTypingCallbacks({
-        start: sendTyping,
-        onStartError: (err) => {
-          logTypingFailure({
-            log: logVerbose,
-            channel: "telegram",
-            target: String(chatId),
-            error: err,
+  let queuedFinal = false;
+  let queuedFinalCount = 0;
+  try {
+    const result = await dispatchReplyWithBufferedBlockDispatcher({
+      ctx: ctxPayload,
+      cfg,
+      dispatcherOptions: {
+        ...prefixOptions,
+        deliver: async (payload, info) => {
+          if (info.kind === "final") {
+            await flushDraft();
+            draftStream?.stop();
+          }
+          const result = await deliverReplies({
+            replies: [payload],
+            chatId: String(chatId),
+            token: opts.token,
+            runtime,
+            bot,
+            replyToMode,
+            textLimit,
+            thread: threadSpec,
+            tableMode,
+            chunkMode,
+            onVoiceRecording: sendRecordVoice,
+            linkPreview: telegramCfg.linkPreview,
+            replyQuoteText,
           });
+          if (result.delivered) {
+            deliveryState.delivered = true;
+          }
         },
-      }).onReplyStart,
-    },
-    replyOptions: {
-      skillFilter,
-      disableBlockStreaming,
-      onPartialReply: draftStream ? (payload) => updateDraftFromPartial(payload.text) : undefined,
-      onModelSelected,
-    },
-  });
+        onSkip: (_payload, info) => {
+          if (info.reason !== "silent") {
+            deliveryState.skippedNonSilent += 1;
+          }
+        },
+        onError: (err, info) => {
+          runtime.error?.(danger(`telegram ${info.kind} reply failed: ${String(err)}`));
+        },
+        onReplyStart: createTypingCallbacks({
+          start: sendTyping,
+          onStartError: (err) => {
+            logTypingFailure({
+              log: logVerbose,
+              channel: "telegram",
+              target: String(chatId),
+              error: err,
+            });
+          },
+        }).onReplyStart,
+      },
+      replyOptions: {
+        skillFilter,
+        disableBlockStreaming,
+        onPartialReply: draftStream ? (payload) => updateDraftFromPartial(payload.text) : undefined,
+        onModelSelected,
+      },
+    });
+    queuedFinal = result.queuedFinal;
+    queuedFinalCount = result.counts.final;
+  } catch (err) {
+    // Ensure draft is flushed/stopped before we send an error message.
+    try {
+      await flushDraft();
+    } catch {}
+    draftStream?.stop();
+    runtime.error?.(danger(`telegram dispatch failed: ${formatUncaughtError(err)}`));
+    try {
+      await deliverReplies({
+        replies: [{ text: DISPATCH_ERROR_FALLBACK }],
+        chatId: String(chatId),
+        token: opts.token,
+        runtime,
+        bot,
+        replyToMode,
+        textLimit,
+        thread: threadSpec,
+        tableMode,
+        chunkMode,
+        linkPreview: telegramCfg.linkPreview,
+        replyQuoteText,
+      });
+    } catch {}
+
+    removeAckReactionAfterReply({
+      removeAfterReply: removeAckAfterReply,
+      ackReactionPromise,
+      ackReactionValue: ackReactionPromise ? "ack" : null,
+      remove: () => reactionApi?.(chatId, msg.message_id ?? 0, []) ?? Promise.resolve(),
+      onError: (err) => {
+        if (!msg.message_id) {
+          return;
+        }
+        logAckFailure({
+          log: logVerbose,
+          channel: "telegram",
+          target: `${chatId}/${msg.message_id}`,
+          error: err,
+        });
+      },
+    });
+    if (isGroup && historyKey) {
+      clearHistoryEntriesIfEnabled({ historyMap: groupHistories, historyKey, limit: historyLimit });
+    }
+    return;
+  }
   draftStream?.stop();
   let sentFallback = false;
-  if (!deliveryState.delivered && deliveryState.skippedNonSilent > 0) {
+  const shouldSendEmptyFallback =
+    !deliveryState.delivered &&
+    // If the dispatcher dropped non-silent payloads, show a fallback message.
+    (deliveryState.skippedNonSilent > 0 ||
+      // If a final reply was queued but nothing was actually delivered, treat it as empty output.
+      queuedFinalCount > 0 ||
+      queuedFinal);
+  if (shouldSendEmptyFallback) {
     const result = await deliverReplies({
       replies: [{ text: EMPTY_RESPONSE_FALLBACK }],
       chatId: String(chatId),
