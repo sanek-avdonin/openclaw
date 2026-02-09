@@ -197,10 +197,17 @@ export async function runPreparedReply(
   // Bare /new or /reset can arrive via native slash commands (BodyForCommands) or can be wrapped
   // with structural prefixes (timestamps/history). Detect it consistently across surfaces.
   const rawBodyForBare = stripStructuralPrefixes(
-    (ctx.BodyForCommands ?? ctx.CommandBody ?? ctx.RawBody ?? ctx.Body ?? commandSource ?? "").trim(),
+    (
+      ctx.BodyForCommands ??
+      ctx.CommandBody ??
+      ctx.RawBody ??
+      ctx.Body ??
+      commandSource ??
+      ""
+    ).trim(),
   );
   const isBareNewOrReset = /^\/(new|reset)$/i.test(rawBodyForBare);
-  const isBareSessionReset = isNewSession && isBareNewOrReset && baseBodyTrimmedRaw.length === 0;
+  const isBareSessionReset = isNewSession && isBareNewOrReset;
   const baseBodyFinal = isBareSessionReset ? BARE_SESSION_RESET_PROMPT : baseBody;
   const baseBodyTrimmed = baseBodyFinal.trim();
   if (!baseBodyTrimmed) {
