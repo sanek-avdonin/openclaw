@@ -136,6 +136,62 @@ describe("trigger handling", () => {
       expect(prompt).toContain("A new session was started via /new or /reset");
     });
   });
+  it("runs a greeting prompt when /reset arrives via BodyForCommands (native slash commands)", async () => {
+    await withTempHome(async (home) => {
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "hello" }],
+        meta: {
+          durationMs: 1,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+
+      const res = await getReplyFromConfig(
+        {
+          Body: "",
+          BodyForCommands: "/reset",
+          CommandSource: "native",
+          From: "+1003",
+          To: "+2000",
+          CommandAuthorized: true,
+        },
+        {},
+        _makeCfg(home),
+      );
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(text).toBe("hello");
+      expect(runEmbeddedPiAgent).toHaveBeenCalledOnce();
+      const prompt = vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      expect(prompt).toContain("A new session was started via /new or /reset");
+    });
+  });
+  it("runs a greeting prompt for /reset even when Body has structural prefixes", async () => {
+    await withTempHome(async (home) => {
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "hello" }],
+        meta: {
+          durationMs: 1,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+
+      const res = await getReplyFromConfig(
+        {
+          Body: "[Dec 4 17:35] /reset",
+          From: "+1003",
+          To: "+2000",
+          CommandAuthorized: true,
+        },
+        {},
+        _makeCfg(home),
+      );
+      const text = Array.isArray(res) ? res[0]?.text : res?.text;
+      expect(text).toBe("hello");
+      expect(runEmbeddedPiAgent).toHaveBeenCalledOnce();
+      const prompt = vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0]?.prompt ?? "";
+      expect(prompt).toContain("A new session was started via /new or /reset");
+    });
+  });
   it("does not reset for unauthorized /reset", async () => {
     await withTempHome(async (home) => {
       const res = await getReplyFromConfig(
